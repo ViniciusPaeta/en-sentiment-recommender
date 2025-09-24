@@ -1,7 +1,33 @@
+# Python cache
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+
+# Virtual environments & config
 .venv/
-.env
-data/
-models/
+.env/
+
+# Data & artifacts (root only, not src/)
+#/data/ ensures only the root 'data' is ignored
+/data/
+/artifacts/
+
+# Notebooks
 .ipynb_checkpoints/
+
+# Logs & temporary files
+*.log
+
+# Serialized models
+*.pkl
+*.joblib
+
+# Optional: ignore generated plots/images
+*.png
+*.jpg
+*.jpeg
+
+# OS-specific
+.DS_Store
+Thumbs.db
