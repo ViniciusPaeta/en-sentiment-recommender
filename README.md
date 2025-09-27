@@ -1,182 +1,178 @@
-# EN Sentiment + Content-based Recommender
+# EN Sentiment + Content-Based Recommender
 
 AI project for **sentiment classification (EN/US)** and a **content-based recommender**.  
-Built with **Python, scikit-learn, FastAPI, Streamlit**.
-
-> Goal: start with a TF-IDF + Logistic Regression baseline (IMDB 50k) and a cosine-similarity recommender.  
-> Later we can swap TF-IDF for sentence embeddings (Sentence-Transformers).
+Baseline: **TF-IDF + Logistic Regression** for sentiment and **TF-IDF + cosine similarity** for recommendation.  
+Backend built with **FastAPI** and demo UI with **Streamlit**.
 
 ---
 
-## 🔧 Tech stack
-- Python, pandas, numpy, scikit-learn  
-- FastAPI + Uvicorn (API)  
-- Streamlit (demo UI)  
-- (Optional) PyTorch + sentence-transformers  
+## Features
+- Sentiment classifier (TF-IDF + Logistic Regression)
+- Content-based recommender (TF-IDF + cosine similarity)
+- FastAPI service (/predict, /recommend)
+- Streamlit demo UI
+- Clean repository (artifacts ignored)
+- Basic CI and pre-commit hooks
 
 ---
 
-## 📁 Project structure
+## Tech Stack
+- Python, pandas, numpy, scikit-learn, scipy, joblib
+- FastAPI + Uvicorn
+- Streamlit
+- HuggingFace `datasets` (IMDB 50k)
+
+---
+
+## Project Layout
 
 ```bash
-en-sentiment-recommender/
-├── artifacts/              # Saved models, metrics, plots
-├── data/                   # Local CSV fallback (imdb_train.csv / imdb_test.csv)
-├── notebooks/              # Jupyter notebooks (exploration/prototyping)
+.
 ├── src/
-│   ├── api/                # FastAPI backend (planned)
-│   ├── app/                # Streamlit demo UI (planned)
-│   ├── data/
-│   │   └── load_imdb.py    # IMDB loader (Hugging Face + CSV fallback)
-│   ├── models/
-│   │   ├── train_baseline.py   # Train TF-IDF + Logistic Regression
-│   │   ├── predict.py          # Predict texts from CLI
-│   │   ├── inspect_baseline.py # Inspect top features
-│   │   └── eval_baseline.py    # Evaluate model (ROC, Confusion Matrix, metrics)
-│   └── utils/              # Helpers (future)
-├── tests/                  # Unit tests (future)
-├── Makefile                # Automation (train, eval, predict, inspect, clean)
-├── requirements.txt        # Dependencies
+│   ├── api/                # FastAPI app (endpoints)
+│   ├── app/                # Streamlit UI (manual testing)
+│   ├── data/               # Data loader (HuggingFace or CSV fallback)
+│   ├── models/             # Training + inference
+│   └── recommender/        # TF-IDF index + cosine recommender
+├── tests/                  # Smoke tests / future unit tests
+├── artifacts/              # (ignored) models and indices generated locally
+├── requirements.txt
+├── pyproject.toml
+├── .pre-commit-config.yaml
+├── .github/workflows/ci.yml
 └── README.md
 ```
 
----
-
-## 📥 IMDB Data Loader
-
-[`src/data/load_imdb.py`](src/data/load_imdb.py) provides a utility to load the [IMDB movie review dataset](https://huggingface.co/datasets/imdb).
-
-### Features
-- Loads IMDB from **Hugging Face Datasets** (`datasets.load_dataset("imdb")`).  
-- Automatic **fallback to local CSV** (`data/imdb_train.csv` / `data/imdb_test.csv`).  
-- Returns **pandas Series** with consistent dtypes (`string` for text, `Int8` for labels).  
-- Validates input `split` and CSV schema.  
-
-### Usage
-
-```python
-from src.data.load_imdb import load_data
-
-X_train, y_train = load_data("train")
-X_test, y_test = load_data("test")
-
-print("Sample:", X_train.iloc[0], "Label:", y_train.iloc[0])
-```
+> The `artifacts/` directory is ignored: models and indices are generated locally.
 
 ---
 
-## 🤖 Baseline Model (TF-IDF + Logistic Regression)
+## Quickstart
 
-Train and evaluate a sentiment classifier with TF-IDF features and Logistic Regression.
-
-### Training
-
+### 1) Environment
 ```bash
-make train
+pip install -r requirements.txt
 ```
 
-- Default: full IMDB (25k train / 25k test).  
-- Optional sampling for faster iterations:
-  ```bash
-  make train TRAIN_N=5000 TEST_N=2000
+### 2) Train the baseline (TF-IDF + Logistic Regression)
+```bash
+python -m src.models.train_baseline
+# -> artifacts/sentiment_tfidf_logreg.joblib
+```
+
+### 3) Build the recommender index (TF-IDF + cosine)
+```bash
+python -m src.recommender.build_index
+# -> artifacts/tfidf_vectorizer.joblib, corpus.joblib, tfidf_matrix.npz
+```
+
+### 4) Run the API
+```bash
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Endpoints
+- GET `/` → health check  
+- POST `/predict`  
+  ```json
+  {"text": "I loved this movie!"}
+  ```
+  →  
+  ```json
+  {"label": 1, "label_name": "positive"}
+  ```
+- POST `/recommend`  
+  ```json
+  {"query": "space adventure with friendship", "top_k": 3}
+  ```
+  →  
+  ```json
+  {"results":[{"rank":1,"idx":123,"score":0.71,"text":"..."}]}
   ```
 
-Artifacts saved in `artifacts/`:
-- `sentiment_tfidf_logreg.joblib` → trained pipeline  
-- `baseline_report.txt` → classification report  
-- `metrics.json` → metrics (accuracy, etc.)  
-
-### Evaluation
-
+### 5) Run the UI (Streamlit)
 ```bash
-make eval
-```
-
-Generates:
-- `eval_report.txt` (classification report, accuracy, ROC-AUC)  
-- `metrics.json` (updated)  
-- `roc_curve.png`  
-- `confusion_matrix.png`  
-- `confusion_matrix.csv`  
-
----
-
-## 🔍 Model inspection & prediction
-
-### Predict from CLI
-```bash
-make predict TEXT="this movie was surprisingly good!"
-```
-
-### Inspect top features
-```bash
-make inspect
-```
-
-Shows top positive and negative words/phrases learned by Logistic Regression.
-
----
-
-## 📊 Results
-
-Baseline results on the **IMDB 50k dataset**:
-
-| Metric       | Value   |
-|--------------|---------|
-| Accuracy     | ~0.889  |
-| Precision    | ~0.889  |
-| Recall       | ~0.889  |
-| F1-score     | ~0.889  |
-| ROC-AUC      | ~0.95   |
-
-Artifacts:
-- `artifacts/eval_report.txt` → full classification report  
-- `artifacts/roc_curve.png` → ROC curve  
-- `artifacts/confusion_matrix.png` → confusion matrix  
-
-Example ROC curve:  
-
-![ROC Curve](artifacts/roc_curve.png)  
-
-Example Confusion Matrix:  
-
-![Confusion Matrix](artifacts/confusion_matrix.png)  
-
----
-
-## ⚙️ Makefile automation
-
-Main commands:
-
-```bash
-make train                # Train baseline
-make eval                 # Evaluate baseline
-make predict TEXT="..."   # Predict text
-make inspect              # Inspect features
-make clean                # Remove artifacts/
+export PYTHONPATH=$PWD
+streamlit run src/app/streamlit_app.py
+# open http://localhost:8501
 ```
 
 ---
 
-## 🚀 Next Steps / Roadmap
-
-1. **Baseline Sentiment Classifier** ✅  
-   - TF-IDF + Logistic Regression on IMDB.  
-
-2. **Content-based Recommender**  
-   - Cosine similarity between reviews.  
-
-3. **Enhanced Representations**  
-   - Replace TF-IDF with Sentence Embeddings (Sentence-Transformers).  
-
-4. **API + Demo UI**  
-   - FastAPI backend + Streamlit interface.  
-
-5. **Deployment**  
-   - Dockerize the service.  
-   - Deploy on Heroku, Render, or AWS/GCP.  
+## Tests
+```bash
+pytest -q
+```
 
 ---
 
-✅ This project is now **end-to-end reproducible**: load → train → evaluate → inspect → predict.  
-Next steps will expand to **recommender** and **deployment**.
+## Development
+
+### Pre-commit
+```bash
+pip install pre-commit
+pre-commit install
+pre-commit run --all-files
+```
+
+### Lint / Format / Types
+```bash
+ruff check .
+black .
+mypy src
+```
+
+---
+
+## CSV Fallback (optional)
+If offline or you prefer CSVs, create:
+- `data/imdb_train.csv`
+- `data/imdb_test.csv`
+
+With columns:
+- `text` (string)
+- `label` (0 = negative, 1 = positive)
+
+The loader tries HuggingFace first and falls back to CSVs.
+
+---
+
+## Troubleshooting
+
+**ModuleNotFoundError: src**  
+```bash
+export PYTHONPATH=$PWD
+```
+
+**API not responding**  
+Ensure Uvicorn is running:
+```bash
+uvicorn src.api.main:app --reload --port 8000
+```
+
+**Model or index not found**  
+Run:
+```bash
+python -m src.models.train_baseline
+python -m src.recommender.build_index
+```
+
+**Pretty JSON in terminal**  
+On Arch:
+```bash
+sudo pacman -S jq
+```
+
+---
+
+## Roadmap
+- Replace TF-IDF with embeddings (`sentence-transformers`)
+- Add probabilities in sentiment output
+- Dockerfile for API/UI
+- DVC for dataset/model tracking
+
+---
+
+## License
+MIT — see LICENSE.
+

@@ -1,0 +1,37 @@
+[project]
+name = "en-sentiment-recommender"
+version = "0.1.0"
+description = "EN Sentiment + Content-Based Recommender (TF-IDF baseline + FastAPI + Streamlit)"
+readme = "README.md"
+requires-python = ">=3.10"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+exclude = [
+  "artifacts",
+  "data",
+  "notebooks",
+  ".venv",
+  "venv",
+  "__pycache__",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+ignore = []
+
+# Use a proper TOML table for per-file-ignores (no inline table)
+[tool.ruff.lint.per-file-ignores]
+"src/app/streamlit_app.py" = ["E402", "I001"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_unused_ignores = true

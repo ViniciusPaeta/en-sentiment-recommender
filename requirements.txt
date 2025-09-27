@@ -1,10 +1,10 @@
 pandas
 numpy
 scikit-learn
-matplotlib
-notebook
+scipy
+joblib
+datasets
 fastapi
 uvicorn
+pydantic
 streamlit
-torch
-sentence-transformers
