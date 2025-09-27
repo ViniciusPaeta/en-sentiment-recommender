@@ -1,89 +1,57 @@
-# ===== EN Sentiment + Recommender — Makefile =====
-# Usage examples:
-#   make help
-#   make train
-#   make eval
-#   make predict TEXT="this was surprisingly good!"
-#   make inspect
-#   make features
-#   make results
-#   make clean
-#
-# Optional sampling (faster iterations):
-#   make train TRAIN_N=5000 TEST_N=2000
-#   make eval TEST_N=2000
-#
-# Tip: choose Python if needed
-#   PY=python3.11 make train
+SHELL := /usr/bin/env bash
+.ONESHELL:
+.SHELLFLAGS := -eu -o pipefail -c
 
-# Python interpreter (use your venv's python if needed)
-PY ?= python
+PY      ?= python
+UVICORN ?= uvicorn
+STREAMLIT ?= streamlit
 
-# Paths
-ARTIFACTS := artifacts
-MODEL := $(ARTIFACTS)/sentiment_tfidf_logreg.joblib
+export PYTHONPATH := $(PWD)
 
-# Sampling knobs (0 = disabled)
-TRAIN_N ?= 0
-TEST_N ?= 0
+ART_DIR := artifacts
+MODEL   := $(ART_DIR)/sentiment_tfidf_logreg.joblib
+VECT    := $(ART_DIR)/tfidf_vectorizer.joblib
+MATRIX  := $(ART_DIR)/tfidf_matrix.npz
+CORPUS  := $(ART_DIR)/corpus.joblib
 
-.PHONY: help setup train eval predict inspect features results clean
+.PHONY: help all train index api api-dev ui lint format test clean
 
 help:
-	@echo "Targets:"
-	@echo "  make train                - Train baseline (TF-IDF + LogReg)"
-	@echo "  make eval                 - Evaluate baseline (ROC-AUC, CM, report)"
-	@echo "  make predict TEXT='... '  - Predict label for a raw text"
-	@echo "  make inspect              - Show top positive/negative features (terminal)"
-	@echo "  make features             - Inspect features and save CSV in artifacts/"
-	@echo "  make results              - Run eval and open plots (ROC & Confusion Matrix)"
-	@echo "  make clean                - Remove artifacts/"
-	@echo
-	@echo "Sampling (optional):"
-	@echo "  make train TRAIN_N=5000 TEST_N=2000"
-	@echo "  make eval  TEST_N=2000"
+	@echo "Available targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## ' Makefile | sed 's/:.*## /  /' | sort
 
-setup:
-	@mkdir -p $(ARTIFACTS)
-	@echo "OK: artifacts/ ready"
+all: train index api-dev ## train + build index + start API (dev)
 
-train: setup
-	BASELINE_TRAIN_SAMPLE=$(TRAIN_N) BASELINE_TEST_SAMPLE=$(TEST_N) \
+train: ## Train baseline sentiment model (TF-IDF + Logistic Regression)
+	@echo ">> Training sentiment baseline model..."
 	$(PY) -m src.models.train_baseline
+	@test -f "$(MODEL)" || { echo "Model not found at $(MODEL)"; exit 1; }
 
-eval: setup
-	BASELINE_TEST_SAMPLE=$(TEST_N) \
-	$(PY) -m src.models.eval_baseline
+index: ## Build TF-IDF index for recommender
+	@echo ">> Building TF-IDF index..."
+	$(PY) -m src.recommender.build_index
+	@test -f "$(VECT)" -a -f "$(MATRIX)" -a -f "$(CORPUS)" || { echo "Index artifacts missing"; exit 1; }
 
-# Use: make predict TEXT="this was surprisingly good!"
-predict:
-ifndef TEXT
-	$(error Provide TEXT='your text' e.g. make predict TEXT="great movie")
-endif
-	$(PY) -m src.models.predict "$(TEXT)"
+api: ## Start FastAPI (prod-ish, no reload, binds to 127.0.0.1)
+	@echo ">> Starting FastAPI server (no reload)..."
+	$(UVICORN) src.api.main:app --host 127.0.0.1 --port 8000
 
-inspect:
-	$(PY) -m src.models.inspect_baseline
+api-dev: ## Start FastAPI (dev, reload, binds to 0.0.0.0)
+	@echo ">> Starting FastAPI server (dev, reload)..."
+	$(UVICORN) src.api.main:app --host 0.0.0.0 --port 8000 --reload
 
-features:
-	$(PY) -m src.models.inspect_baseline
-	@echo "CSV saved to artifacts/top_features.csv"
+ui: ## Start Streamlit UI
+	@echo ">> Starting Streamlit UI..."
+	$(STREAMLIT) run src/app/streamlit_app.py
 
-# Run evaluation and try to open the generated plots
-results: eval
-	@echo
-	@echo "==== EVAL SUMMARY ===="
-	@echo "Report:        artifacts/eval_report.txt"
-	@echo "ROC Curve:     artifacts/roc_curve.png"
-	@echo "Confusion Mat: artifacts/confusion_matrix.png"
-	@echo
-	@echo "---- report head ----"
-	@head -n 20 artifacts/eval_report.txt || true
-	@echo "---------------------"
-	@command -v xdg-open >/dev/null 2>&1 && xdg-open artifacts/roc_curve.png || true
-	@command -v xdg-open >/dev/null 2>&1 && xdg-open artifacts/confusion_matrix.png || true
-	@echo "(If images didn't open, open them manually from the artifacts/ folder.)"
+lint: ## Ruff lint (auto-fix)
+	ruff check . --fix
 
-clean:
-	@rm -rf $(ARTIFACTS)
-	@echo "Removed: $(ARTIFACTS)/"
+format: ## Black format
+	black .
+
+test: ## Run test suite
+	pytest -q
+
+clean: ## Remove local artifacts and caches (not versioned)
+	rm -rf $(ART_DIR) data .ruff_cache __pycache__ */__pycache__ .pytest_cache .mypy_cache

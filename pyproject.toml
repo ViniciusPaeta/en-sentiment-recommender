@@ -21,13 +21,13 @@ exclude = [
   ".venv",
   "venv",
   "__pycache__",
+  ".ruff_cache",
 ]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
 ignore = []
 
-# Use a proper TOML table for per-file-ignores (no inline table)
 [tool.ruff.lint.per-file-ignores]
 "src/app/streamlit_app.py" = ["E402", "I001"]
 
